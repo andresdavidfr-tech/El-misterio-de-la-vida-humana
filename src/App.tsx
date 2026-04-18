@@ -5,8 +5,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronRight, ChevronLeft, Heart, Ghost, Cross, Sparkles, BookOpen, User, Volume2, VolumeX, Play } from 'lucide-react';
-import { GoogleGenAI, Modality } from "@google/genai";
+import { ChevronRight, ChevronLeft, Heart, Ghost, Cross, Sparkles, BookOpen, User, Volume2, VolumeX, Play, RotateCcw } from 'lucide-react';
 
 interface KeyData {
   id: number;
@@ -63,37 +62,56 @@ const KEYS: KeyData[] = [
   }
 ];
 
+const ConcentricCircles = () => (
+  <svg viewBox="0 0 200 200" className="w-48 h-48 md:w-64 md:h-64 opacity-20 group-hover:opacity-40 transition-all duration-700">
+    <motion.circle
+      cx="100" cy="100" r="80"
+      fill="none" stroke="currentColor" strokeWidth="1.5"
+      strokeDasharray="4 4"
+      initial={{ rotate: 0 }}
+      animate={{ rotate: 360 }}
+      transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+    />
+    <motion.circle
+      cx="100" cy="100" r="55"
+      fill="none" stroke="currentColor" strokeWidth="1.5"
+      strokeDasharray="3 3"
+      initial={{ rotate: 360 }}
+      animate={{ rotate: 0 }}
+      transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+    />
+    <motion.circle
+      cx="100" cy="100" r="28"
+      fill="currentColor"
+      initial={{ scale: 0.9 }}
+      animate={{ scale: 1.1 }}
+      transition={{ duration: 2, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }}
+    />
+    <text x="100" y="32" textAnchor="middle" className="text-[10px] font-mono tracking-widest uppercase" fill="currentColor">Cuerpo</text>
+    <text x="100" y="60" textAnchor="middle" className="text-[10px] font-mono tracking-widest uppercase" fill="currentColor">Alma</text>
+    <text x="100" y="103" textAnchor="middle" className="text-[8px] font-mono tracking-widest uppercase font-bold" fill="black">Espíritu</text>
+  </svg>
+);
+
 export default function App() {
   const [currentStep, setCurrentStep] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isNarrating, setIsNarrating] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [voicesLoaded, setVoicesLoaded] = useState(false);
 
-  const audioRef = useRef<AudioBufferSourceNode | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const audioCache = useRef<Map<number, AudioBuffer>>(new Map());
-  const prefetching = useRef<Set<number>>(new Set());
   const bgMusicRef = useRef<HTMLAudioElement | null>(null);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
-  // Initialize AI instance
-  const ai = useMemo(() => new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string }), []);
-
-  const initAudioContext = async () => {
-    try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      }
-      if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume();
-      }
-      return audioContextRef.current;
-    } catch (e) {
-      console.error("AudioContext initialization failed", e);
-      return null;
-    }
-  };
+  useEffect(() => {
+    const loadVoices = () => {
+      window.speechSynthesis.getVoices();
+      setVoicesLoaded(true);
+    };
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }, []);
 
   const generateBackgroundMusic = () => {
     // Using a very stable ambient track
@@ -109,119 +127,48 @@ export default function App() {
       if (playPromise !== undefined) {
         playPromise.catch(e => {
           console.warn("Ambient music play blocked:", e);
-          // Retry on next click happens naturally via handleStart or other UI interactions
         });
       }
     }
   };
 
-  const fetchAudioBuffer = async (text: string, stepId: number): Promise<AudioBuffer | null> => {
-    if (audioCache.current.has(stepId)) return audioCache.current.get(stepId)!;
-    if (prefetching.current.has(stepId)) return null;
-
-    prefetching.current.add(stepId);
-    try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3.1-flash-tts-preview",
-        contents: [{ parts: [{ text: `Actúa como un narrador cálido y lee esto: ${text}` }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'Kore' },
-            },
-          },
-        },
-      });
-
-      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-      if (audioPart?.inlineData?.data) {
-        const base64Audio = audioPart.inlineData.data;
-        const binaryString = window.atob(base64Audio);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-
-        const bufferLen = Math.floor(len / 2);
-        const audioContent = new Int16Array(bytes.buffer, 0, bufferLen);
-        
-        // Reuse context or create one if needed (but it will be resumed later)
-        const context = audioContextRef.current || new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-        const audioBuffer = context.createBuffer(1, audioContent.length, 24000);
-        const channelData = audioBuffer.getChannelData(0);
-
-        for (let i = 0; i < audioContent.length; i++) {
-          channelData[i] = audioContent[i] / 32768;
-        }
-
-        audioCache.current.set(stepId, audioBuffer);
-        return audioBuffer;
-      }
-    } catch (e) {
-      console.error(`Prefetch failed for step ${stepId}:`, e);
-    } finally {
-      prefetching.current.delete(stepId);
-    }
-    return null;
-  };
-
   const stopAudio = () => {
-    if (audioRef.current) {
-      try { audioRef.current.stop(); } catch(e) {}
-      audioRef.current = null;
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
     setIsNarrating(false);
   };
 
-  const playNarration = async (stepIndex: number) => {
-    if (isMuted) return;
-    setError(null);
+  const playNarration = (stepIndex: number) => {
+    if (isMuted || !window.speechSynthesis) return;
+    
     stopAudio();
     setIsNarrating(true);
 
-    // Give a bit of room for the transition
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    const text = KEYS[stepIndex].narrative;
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Try to find a warm/nice Spanish voice
+    const voices = window.speechSynthesis.getVoices();
+    const spanishVoice = voices.find(v => v.lang.startsWith('es') && (v.name.includes('Google') || v.name.includes('Natural'))) || 
+                         voices.find(v => v.lang.startsWith('es')) ||
+                         voices[0];
 
-    try {
-      const context = await initAudioContext();
-      if (!context) throw new Error("Could not initialize audio context");
+    if (spanishVoice) utterance.voice = spanishVoice;
+    
+    utterance.pitch = 1.0;
+    utterance.rate = 0.95; 
+    utterance.volume = 1.0;
 
-      let buffer = audioCache.current.get(stepIndex);
-      if (!buffer) {
-        buffer = await fetchAudioBuffer(KEYS[stepIndex].narrative, stepIndex) || undefined;
-      }
+    utterance.onend = () => setIsNarrating(false);
+    utterance.onerror = () => setIsNarrating(false);
 
-      if (buffer) {
-        const source = context.createBufferSource();
-        source.buffer = buffer;
-        source.connect(context.destination);
-        source.onended = () => setIsNarrating(false);
-        source.start();
-        audioRef.current = source;
-      } else {
-        setIsNarrating(false);
-      }
-      
-      // Prefetch next step
-      if (stepIndex < KEYS.length - 1) {
-        fetchAudioBuffer(KEYS[stepIndex + 1].narrative, stepIndex + 1);
-      }
-    } catch (error) {
-      console.error("Narration failed:", error);
-      setError("La narración tuvo un problema técnico. Puedes continuar leyendo.");
-      setIsNarrating(false);
-    }
+    utteranceRef.current = utterance;
+    
+    setTimeout(() => {
+      window.speechSynthesis.speak(utterance);
+    }, 1000);
   };
-
-  // Prefetch first step on mount
-  useEffect(() => {
-    const warmup = async () => {
-      await fetchAudioBuffer(KEYS[0].narrative, 0);
-    };
-    warmup();
-  }, [ai]);
 
   useEffect(() => {
     if (hasStarted && !isFinished) {
@@ -230,10 +177,7 @@ export default function App() {
     return () => stopAudio();
   }, [currentStep, hasStarted, isMuted, isFinished]);
 
-  const handleStart = async () => {
-    try {
-      await initAudioContext();
-    } catch(e) {}
+  const handleStart = () => {
     setHasStarted(true);
     generateBackgroundMusic();
   };
@@ -306,18 +250,16 @@ export default function App() {
               <p className="text-lg md:text-xl text-white/60 mb-12 max-w-md leading-relaxed">
                 Descubre el propósito que Dios tiene para ti a través de estas seis llaves reveladoras.
               </p>
-              <button
-                onClick={handleStart}
-                className="group flex items-center gap-4 px-10 py-5 bg-white text-black rounded-full font-medium hover:bg-[#ff4e00] hover:text-white transition-all shadow-xl hover:shadow-[#ff4e00]/20"
-              >
-                <Play size={24} fill="currentColor" />
-                <span className="text-lg tracking-wide">Comenzar el Viaje</span>
-              </button>
-              {error && (
-                <p className="mt-4 text-sm text-[#ff4e00]/80">
-                  {error}
-                </p>
-              )}
+              
+              {!hasStarted ? (
+                <button
+                  onClick={handleStart}
+                  className="group flex items-center gap-4 px-10 py-5 bg-white text-black rounded-full font-medium hover:bg-[#ff4e00] hover:text-white transition-all shadow-xl hover:shadow-[#ff4e00]/20"
+                >
+                  <Play size={24} fill="currentColor" />
+                  <span className="text-lg tracking-wide">Comenzar el Viaje</span>
+                </button>
+              ) : null}
             </motion.div>
           ) : isFinished ? (
             <motion.div
@@ -366,8 +308,12 @@ export default function App() {
 
               {/* Content Card */}
               <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 md:p-12 shadow-2xl relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-8 text-[#ff4e00]/20 group-hover:text-[#ff4e00]/40 transition-colors">
-                  <Icon size={120} strokeWidth={1} />
+                <div className="absolute top-0 right-0 p-8 text-[#ff4e00]/20 group-hover:text-[#ff4e00]/40 transition-all duration-700">
+                  {currentKey.id === 2 ? (
+                    <ConcentricCircles />
+                  ) : (
+                    <Icon size={120} strokeWidth={1} />
+                  )}
                 </div>
 
                 <h2 className="text-3xl md:text-5xl font-serif font-light mb-6 text-white leading-tight">
@@ -400,12 +346,6 @@ export default function App() {
                   >
                     &ldquo;{currentKey.extra}&rdquo;
                   </motion.div>
-                )}
-
-                {error && (
-                  <div className="mt-4 p-4 bg-[#ff4e00]/10 border border-[#ff4e00]/20 rounded-xl text-xs text-[#ff4e00] text-center">
-                    {error}
-                  </div>
                 )}
               </div>
 
