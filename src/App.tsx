@@ -50,7 +50,7 @@ const KEYS: KeyData[] = [
     title: "La regeneración",
     icon: Sparkles,
     content: "El hombre ahora puede recibir la vida de Dios en su espíritu. Esto es nacer de nuevo.",
-    narrative: "Este es el momento de la chispa. Puedes recibir esta vida ahora mismo. Es tan simple como abrir el corazón y hablarle a Él. Muchos lo hacen con estas palabras sinceras:",
+    narrative: "Este es el momento de la decisión. Puedes recibir esta vida ahora mismo. Es tan simple como abrir el corazón y hablarle a Él. Muchos lo hacen con estas palabras sinceras:",
     extra: "Señor Jesús, soy un pecador. Te necesito. Gracias por haber muerto por mí. Señor Jesús, perdóname y límpiame de todos mis pecados. Creo que Tú resucitaste de los muertos, y te recibo ahora mismo como mi Salvador y mi vida. ¡Entra en mí! ¡Lléname de Tu vida! Señor Jesús, me entrego a Ti por causa de Tu propósito."
   },
   {
@@ -59,11 +59,18 @@ const KEYS: KeyData[] = [
     icon: BookOpen,
     content: "Dios empieza un proceso donde se extiende como vida desde el espíritu al alma.",
     narrative: "La regeneración es solo el comienzo. Ahora, esa vida en tu espíritu empieza a extenderse, como una luz que ilumina cada rincón de tu mente y tus emociones. Este proceso de transformación culminará un día en la gloria total, donde todo nuestro ser estará saturado de Su vida incomparable."
+  },
+  {
+    id: 7,
+    title: "Comienza tu camino",
+    icon: Sparkles,
+    content: "Queremos acompañarte en este proceso de conocer el propósito de Dios para tu vida.",
+    narrative: "Si has tomado la decisión de recibir a Cristo o deseas saber más sobre cómo disfrutar de esta vida divina, déjanos tus datos. Nos encantaría contactarte."
   }
 ];
 
 const ConcentricCircles = () => (
-  <svg viewBox="0 0 200 200" className="w-48 h-48 md:w-64 md:h-64 opacity-20 group-hover:opacity-40 transition-all duration-700">
+  <svg viewBox="0 0 200 200" className="w-56 h-56 md:w-72 md:h-72 opacity-60 group-hover:opacity-90 transition-all duration-700">
     <motion.circle
       cx="100" cy="100" r="80"
       fill="none" stroke="currentColor" strokeWidth="1.5"
@@ -87,10 +94,63 @@ const ConcentricCircles = () => (
       animate={{ scale: 1.1 }}
       transition={{ duration: 2, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }}
     />
-    <text x="100" y="32" textAnchor="middle" className="text-[10px] font-mono tracking-widest uppercase" fill="currentColor">Cuerpo</text>
-    <text x="100" y="60" textAnchor="middle" className="text-[10px] font-mono tracking-widest uppercase" fill="currentColor">Alma</text>
-    <text x="100" y="103" textAnchor="middle" className="text-[8px] font-mono tracking-widest uppercase font-bold" fill="black">Espíritu</text>
+    <text x="100" y="32" textAnchor="middle" className="text-[12px] font-mono tracking-widest uppercase font-bold" fill="currentColor">Cuerpo</text>
+    <text x="100" y="60" textAnchor="middle" className="text-[12px] font-mono tracking-widest uppercase font-bold" fill="currentColor">Alma</text>
+    <text x="100" y="103" textAnchor="middle" className="text-[10px] font-mono tracking-widest uppercase font-bold" fill="black">Espíritu</text>
   </svg>
+);
+
+const TheFall = () => (
+  <svg viewBox="0 0 200 200" className="w-56 h-56 md:w-72 md:h-72 opacity-60 group-hover:opacity-90 transition-all duration-700">
+    <motion.path
+      d="M40 40 L160 160 M160 40 L40 160"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      initial={{ pathLength: 0, opacity: 0 }}
+      animate={{ pathLength: 1, opacity: 1 }}
+      transition={{ duration: 1.5 }}
+    />
+    <motion.path
+      d="M100 100 m-60 0 a 60 60 0 1 0 120 0 a 60 60 0 1 0 -120 0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1"
+      strokeDasharray="4 4"
+      initial={{ rotate: 0 }}
+      animate={{ rotate: -360 }}
+      transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+    />
+    <motion.path
+      d="M100 40 V160 M40 100 H160"
+      stroke="#ff4e00"
+      strokeWidth="0.5"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 0.3 }}
+    />
+    <motion.circle
+      cx="100" cy="100" r="15"
+      fill="#000"
+      stroke="#ff4e00"
+      strokeWidth="2"
+      initial={{ scale: 0 }}
+      animate={{ scale: [1, 1.2, 1] }}
+      transition={{ duration: 3, repeat: Infinity }}
+    />
+  </svg>
+);
+
+const StepProgress = ({ current, total }: { current: number, total: number }) => (
+  <div className="fixed top-0 left-0 w-full h-1.5 bg-white/5 z-[60] flex">
+    {Array.from({ length: total }).map((_, i) => (
+      <div 
+        key={i}
+        className={`h-full transition-all duration-700 ease-in-out flex-grow border-r border-black/40 ${
+          i <= current ? 'bg-[#ff4e00] shadow-[0_0_15px_#ff4e00]' : 'bg-white/5'
+        }`}
+      />
+    ))}
+  </div>
 );
 
 export default function App() {
@@ -100,6 +160,8 @@ export default function App() {
   const [hasStarted, setHasStarted] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [voicesLoaded, setVoicesLoaded] = useState(false);
+  const [formSubmitted, setFormSubmitted] = useState(false);
+  const [contactInfo, setContactInfo] = useState({ name: '', contact: '' });
 
   const bgMusicRef = useRef<HTMLAudioElement | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -179,10 +241,12 @@ export default function App() {
 
     utteranceRef.current = utterance;
     
-    // Use a smaller delay for better responsiveness
+    // Use the requested 3-second delay
     setTimeout(() => {
-      window.speechSynthesis.speak(utterance);
-    }, 400);
+      if (hasStarted && !isMuted) {
+        window.speechSynthesis.speak(utterance);
+      }
+    }, 3000);
   };
 
   useEffect(() => {
@@ -232,6 +296,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0a0502] text-[#e0d8d0] font-sans selection:bg-[#ff4e00] selection:text-white flex flex-col items-center justify-center p-4 overflow-hidden relative">
+      {hasStarted && !isFinished && (
+        <StepProgress current={currentStep} total={KEYS.length} />
+      )}
+      
       {/* Immersive Background */}
       <div className="absolute inset-0 pointer-events-none">
         <div 
@@ -299,6 +367,8 @@ export default function App() {
                   setCurrentStep(0);
                   setIsFinished(false);
                   setHasStarted(false);
+                  setFormSubmitted(false);
+                  setContactInfo({ name: '', contact: '' });
                 }}
                 className="px-8 py-4 border border-white/10 hover:bg-white/5 rounded-full transition-all text-sm uppercase tracking-widest"
               >
@@ -318,7 +388,7 @@ export default function App() {
               <div className="flex items-center gap-4">
                 <div className="h-[1px] flex-grow bg-white/20" />
                 <span className="font-mono text-xs tracking-widest text-[#ff4e00] uppercase">
-                  Etapa {currentKey.id} de 6
+                  Etapa {currentKey.id} de {KEYS.length}
                 </span>
                 <div className="h-[1px] flex-grow bg-white/20" />
               </div>
@@ -326,11 +396,33 @@ export default function App() {
               {/* Content Card */}
               <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 md:p-12 shadow-2xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-8 text-[#ff4e00]/20 group-hover:text-[#ff4e00]/40 transition-all duration-700">
-                  {currentKey.id === 2 ? (
-                    <ConcentricCircles />
-                  ) : (
-                    <Icon size={120} strokeWidth={1} />
-                  )}
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={currentKey.id}
+                      initial={{ opacity: 0, scale: 0.8, rotate: -5 }}
+                      animate={{ 
+                        opacity: 1, 
+                        scale: 1, 
+                        rotate: 0,
+                        y: [0, -8, 0]
+                      }}
+                      exit={{ opacity: 0, scale: 0.8, rotate: 5 }}
+                      transition={{ 
+                        opacity: { duration: 0.4 },
+                        scale: { duration: 0.4 },
+                        rotate: { duration: 0.4 },
+                        y: { duration: 5, repeat: Infinity, ease: "easeInOut" }
+                      }}
+                    >
+                      {currentKey.id === 2 ? (
+                        <ConcentricCircles />
+                      ) : currentKey.id === 3 ? (
+                        <TheFall />
+                      ) : (
+                        <Icon size={120} strokeWidth={1} />
+                      )}
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
 
                 <h2 className="text-3xl md:text-5xl font-serif font-light mb-6 text-white leading-tight">
@@ -353,6 +445,51 @@ export default function App() {
                 <p className="text-base md:text-lg text-[#e0d8d0]/90 leading-relaxed font-light">
                   {currentKey.content}
                 </p>
+
+                {currentKey.id === 7 && (
+                  <div className="mt-8 space-y-4">
+                    {!formSubmitted ? (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="space-y-4 max-w-sm"
+                      >
+                        <input 
+                          type="text" 
+                          placeholder="Tu Nombre"
+                          value={contactInfo.name}
+                          onChange={(e) => setContactInfo({...contactInfo, name: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:border-[#ff4e00]/50 transition-all"
+                        />
+                        <input 
+                          type="text" 
+                          placeholder="Email o Teléfono"
+                          value={contactInfo.contact}
+                          onChange={(e) => setContactInfo({...contactInfo, contact: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:border-[#ff4e00]/50 transition-all"
+                        />
+                        <button 
+                          onClick={() => {
+                            if(contactInfo.name && contactInfo.contact) setFormSubmitted(true);
+                          }}
+                          className="w-full py-3 bg-[#ff4e00] text-white rounded-xl font-medium hover:bg-[#ff6a26] transition-all shadow-lg active:scale-95"
+                        >
+                          Enviar datos
+                        </button>
+                      </motion.div>
+                    ) : (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="p-6 bg-[#ff4e00]/10 border border-[#ff4e00]/20 rounded-2xl text-center"
+                      >
+                        <Heart size={32} className="mx-auto mb-3 text-[#ff4e00]" fill="currentColor" />
+                        <p className="text-white font-medium">¡Gracias, {contactInfo.name}!</p>
+                        <p className="text-white/60 text-sm mt-1">Pronto nos pondremos en contacto contigo.</p>
+                      </motion.div>
+                    )}
+                  </div>
+                )}
 
                 {currentKey.extra && (
                   <motion.div 
