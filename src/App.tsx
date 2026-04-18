@@ -143,12 +143,23 @@ export default function App() {
     if (isMuted || !window.speechSynthesis) return;
     
     stopAudio();
+    
+    // Web Speech API can sometimes "hang". Resuming first is a common fix.
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
+    
     setIsNarrating(true);
 
-    const text = KEYS[stepIndex].narrative;
+    const text = KEYS[stepIndex]?.narrative || "";
+    if (!text) {
+      setIsNarrating(false);
+      return;
+    }
+
     const utterance = new SpeechSynthesisUtterance(text);
     
-    // Try to find a warm/nice Spanish voice
+    // Find a Spanish voice
     const voices = window.speechSynthesis.getVoices();
     const spanishVoice = voices.find(v => v.lang.startsWith('es') && (v.name.includes('Google') || v.name.includes('Natural'))) || 
                          voices.find(v => v.lang.startsWith('es')) ||
@@ -157,17 +168,21 @@ export default function App() {
     if (spanishVoice) utterance.voice = spanishVoice;
     
     utterance.pitch = 1.0;
-    utterance.rate = 0.95; 
+    utterance.rate = 0.9; // Reflective tone
     utterance.volume = 1.0;
 
     utterance.onend = () => setIsNarrating(false);
-    utterance.onerror = () => setIsNarrating(false);
+    utterance.onerror = (e) => {
+      console.error("SpeechSynthesis error:", e);
+      setIsNarrating(false);
+    };
 
     utteranceRef.current = utterance;
     
+    // Use a smaller delay for better responsiveness
     setTimeout(() => {
       window.speechSynthesis.speak(utterance);
-    }, 1000);
+    }, 400);
   };
 
   useEffect(() => {
@@ -180,6 +195,8 @@ export default function App() {
   const handleStart = () => {
     setHasStarted(true);
     generateBackgroundMusic();
+    // Synchronously start narration for the first step to ensure browser allows it
+    setTimeout(() => playNarration(0), 100);
   };
 
   useEffect(() => {
@@ -210,8 +227,8 @@ export default function App() {
     }
   };
 
-  const currentKey = KEYS[currentStep];
-  const Icon = currentKey.icon;
+  const currentKey = (KEYS && KEYS[currentStep]) || KEYS[0];
+  const Icon = currentKey?.icon || User;
 
   return (
     <div className="min-h-screen bg-[#0a0502] text-[#e0d8d0] font-sans selection:bg-[#ff4e00] selection:text-white flex flex-col items-center justify-center p-4 overflow-hidden relative">
