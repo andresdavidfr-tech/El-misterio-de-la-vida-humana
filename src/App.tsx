@@ -163,6 +163,9 @@ export default function App() {
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [contactInfo, setContactInfo] = useState({ name: '', contact: '' });
 
+  const contactInfoRef = useRef({ name: '', contact: '' });
+  const narrationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const bgMusicRef = useRef<HTMLAudioElement | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
@@ -195,6 +198,9 @@ export default function App() {
   };
 
   const stopAudio = () => {
+    if (narrationTimeoutRef.current) {
+      clearTimeout(narrationTimeoutRef.current);
+    }
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -206,33 +212,30 @@ export default function App() {
     
     stopAudio();
     
-    // Web Speech API can sometimes "hang". Resuming first is a common fix.
     if (window.speechSynthesis.paused) {
       window.speechSynthesis.resume();
     }
-    
-    setIsNarrating(true);
 
     const text = KEYS[stepIndex]?.narrative || "";
-    if (!text) {
-      setIsNarrating(false);
-      return;
-    }
+    if (!text) return;
+
+    // "Unblock" audio context for mobile browsers by triggering a silent utterance immediately
+    const silence = new SpeechSynthesisUtterance("");
+    silence.volume = 0;
+    window.speechSynthesis.speak(silence);
 
     const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Find a Spanish voice
     const voices = window.speechSynthesis.getVoices();
     const spanishVoice = voices.find(v => v.lang.startsWith('es') && (v.name.includes('Google') || v.name.includes('Natural'))) || 
                          voices.find(v => v.lang.startsWith('es')) ||
                          voices[0];
 
     if (spanishVoice) utterance.voice = spanishVoice;
-    
     utterance.pitch = 1.0;
-    utterance.rate = 0.9; // Reflective tone
+    utterance.rate = 0.9;
     utterance.volume = 1.0;
 
+    utterance.onstart = () => setIsNarrating(true);
     utterance.onend = () => setIsNarrating(false);
     utterance.onerror = (e) => {
       console.error("SpeechSynthesis error:", e);
@@ -241,8 +244,7 @@ export default function App() {
 
     utteranceRef.current = utterance;
     
-    // Use the requested 3-second delay
-    setTimeout(() => {
+    narrationTimeoutRef.current = setTimeout(() => {
       if (hasStarted && !isMuted) {
         window.speechSynthesis.speak(utterance);
       }
@@ -395,7 +397,7 @@ export default function App() {
 
               {/* Content Card */}
               <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 md:p-12 shadow-2xl relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-8 text-[#ff4e00]/20 group-hover:text-[#ff4e00]/40 transition-all duration-700">
+                <div className="absolute -top-12 -right-12 md:-top-20 md:-right-20 p-8 text-[#ff4e00]/40 group-hover:text-[#ff4e00]/60 transition-all duration-700 pointer-events-none scale-110 md:scale-125">
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={currentKey.id}
